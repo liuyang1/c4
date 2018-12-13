@@ -42,6 +42,9 @@ enum { LEA ,IMM ,JMP ,JSR ,BZ  ,BNZ ,ENT ,ADJ ,LEV ,LI  ,LC  ,SI  ,SC  ,PSH ,
 enum { CHAR, INT, PTR };
 
 // identifier offsets (since we can't create an ident struct)
+// Idenity list
+// [Tk0, Hash0, Name0, ..., Tk1, Hash1, Name1, ..., Tk2, ...]
+// so one entire Idenity's length is `IdSz`
 enum { Tk, Hash, Name, Class, Type, Val, HClass, HType, HVal, Idsz };
 
 void next()
@@ -51,7 +54,7 @@ void next()
   while (tk = *p) {
     ++p;
     if (tk == '\n') {
-      if (src) {
+      if (src) { // if src, show source code
         printf("%d: %.*s", line, p - lp, lp);
         lp = p;
         while (le < e) {
@@ -64,15 +67,19 @@ void next()
       ++line;
     }
     else if (tk == '#') {
+        // skip pre-processing statment in C4
       while (*p != 0 && *p != '\n') ++p;
     }
     else if ((tk >= 'a' && tk <= 'z') || (tk >= 'A' && tk <= 'Z') || tk == '_') {
-      pp = p - 1;
+        // find one word
+      pp = p - 1; // store pp: start of this token
       while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_')
-        tk = tk * 147 + *p++;
-      tk = (tk << 6) + (p - pp);
-      id = sym;
-      while (id[Tk]) {
+        tk = tk * 149 + *p++; // 147 is greater than length of tokens and classes list ???
+      // printf("tk=%x -> %x\n", tk, (tk << 6) + (p - pp));
+      tk = (tk << 6) + (p - pp); // kind of hash
+      id = sym; // save this token to sym table
+      while (id[Tk]) { // find one free slot in table
+          // if find have same token (same hash), then overwrite it.
         if (tk == id[Hash] && !memcmp((char *)id[Name], pp, p - pp)) { tk = id[Tk]; return; }
         id = id + Idsz;
       }
@@ -82,9 +89,15 @@ void next()
       return;
     }
     else if (tk >= '0' && tk <= '9') {
+        // 3 condition:
+        // not start with 0: decimal number
+        // start with 0x: hex number
+        // start with 0: octal number
       if (ival = tk - '0') { while (*p >= '0' && *p <= '9') ival = ival * 10 + *p++ - '0'; }
       else if (*p == 'x' || *p == 'X') {
         while ((tk = *++p) && ((tk >= '0' && tk <= '9') || (tk >= 'a' && tk <= 'f') || (tk >= 'A' && tk <= 'F')))
+            // 0 -> 0x30, 1 -> 0x31, A -> 0x41, a -> 0x61
+            // good skill, so this style cound handle xdigit all conditional
           ival = ival * 16 + (tk & 15) + (tk >= 'A' ? 9 : 0);
       }
       else { while (*p >= '0' && *p <= '7') ival = ival * 8 + *p++ - '0'; }
@@ -92,7 +105,7 @@ void next()
       return;
     }
     else if (tk == '/') {
-      if (*p == '/') {
+      if (*p == '/') { // skip // comment
         ++p;
         while (*p != 0 && *p != '\n') ++p;
       }
@@ -101,7 +114,7 @@ void next()
         return;
       }
     }
-    else if (tk == '\'' || tk == '"') {
+    else if (tk == '\'' || tk == '"') { // literal string
       pp = data;
       while (*p != 0 && *p != tk) {
         if ((ival = *p++) == '\\') {
@@ -338,7 +351,10 @@ int main(int argc, char **argv)
   --argc; ++argv;
   if (argc > 0 && **argv == '-' && (*argv)[1] == 's') { src = 1; --argc; ++argv; }
   if (argc > 0 && **argv == '-' && (*argv)[1] == 'd') { debug = 1; --argc; ++argv; }
-  if (argc < 1) { printf("usage: c4 [-s] [-d] file ...\n"); return -1; }
+  if (argc < 1) { printf("usage: c4 [-s] [-d] file ...\n"
+                         "\t-s show src file with asm op\n"
+                         "\t-d debug\n");
+  return -1; }
 
   if ((fd = open(*argv, 0)) < 0) { printf("could not open(%s)\n", *argv); return -1; }
 
